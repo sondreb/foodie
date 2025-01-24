@@ -1,5 +1,6 @@
 const express = require('express');
 require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+const { version } = require('../../package.json');
 const app = express();
 const cacheMiddleware = require('../middleware/cache');
 const throttleMiddleware = require('../middleware/throttle');
@@ -42,6 +43,12 @@ app.use(cacheMiddleware);
 app.use(throttleMiddleware);
 
 // Define your routes here
+app.get('/version', (req, res) => {
+  res.json({
+    version
+  });
+});
+
 app.get('/restaurants', async (req, res) => {
   try {
     const dbClient = await getClient();

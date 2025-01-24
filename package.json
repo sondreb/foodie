@@ -1,6 +1,6 @@
 {
   "name": "foodie",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "main": "src/routes/index.js",
   "scripts": {
     "start": "node src/routes/index.js"
