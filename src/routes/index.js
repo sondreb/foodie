@@ -273,9 +273,6 @@ app.post("/authenticate/login", limiter, async (req, res) => {
       return res.status(400).json({ error: "Invalid credentials format" });
     }
 
-    console.log('Username:', username);
-    console.log('Password:', password);
-
     const dbClient = await getClient();
     const db = dbClient.db("foodie");
     const user = await db.collection("documents").findOne({
