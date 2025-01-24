@@ -1,0 +1,13 @@
+{
+  "name": "foodie",
+  "version": "1.0.0",
+  "main": "src/routes/index.js",
+  "scripts": {
+    "start": "node src/routes/index.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "node-cache": "^5.1.2",
+    "express-rate-limit": "^5.2.6"
+  }
+}
