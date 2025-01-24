@@ -12,14 +12,20 @@ import MUUID from "uuid-mongodb";
 import cache from "memory-cache";
 import { serialize } from "cookie";
 import jwt from "jsonwebtoken";
+import argon2 from "argon2";
+import crypto from 'crypto';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Initialize dotenv
+dotenv.config({ path: resolve(__dirname, "../../.env") });
 
 const mUUID = MUUID.mode("relaxed"); // use relaxed mode
 const PRODUCTION = process.env["NODE_ENV"] === "production";
 const KEY = process.env["JWT_KEY"];
 
-// Get __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Load package.json
 const packageJson = JSON.parse(
@@ -37,8 +43,12 @@ const limiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-// Initialize dotenv
-dotenv.config({ path: resolve(__dirname, "../../.env") });
+// Add strict rate limit for key generation
+const keyGenLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // limit each IP to 3 requests per hour
+  message: 'Too many key generation attempts, please try again later'
+});
 
 const app = express();
 
@@ -167,9 +177,9 @@ app.get("/authenticate", (req, res) => {
 });
 
 app.post("/authenticate", async (req, res) => {
-
-
   try {
+    const { password } = req.body;
+
     if (!req.body.proof) {
       return res.status(404);
     }
@@ -216,7 +226,7 @@ app.post("/authenticate", async (req, res) => {
     let serialized;
 
     if (PRODUCTION) {
-      console.log('PRODUCTION!!!');
+      console.log("PRODUCTION!!!");
       // If the verification failed, it should have thrown an exception by now. We can generate an JWT and make a cookie for it.
       serialized = serialize("token", token, {
         httpOnly: true,
@@ -226,7 +236,7 @@ app.post("/authenticate", async (req, res) => {
         path: "/",
       });
     } else {
-      console.log('DEVELOPMENT!!!');
+      console.log("DEVELOPMENT!!!");
       // If the verification failed, it should have thrown an exception by now. We can generate an JWT and make a cookie for it.
       serialized = serialize("token", token, {
         maxAge: 60 * 60 * 24 * 1, // 1 day, should this cookie be used to issue session cookies and be long-lived? The JWT itself is only valid 1h.
@@ -247,8 +257,75 @@ app.post("/authenticate", async (req, res) => {
   } catch (err) {
     console.log(err);
   }
+});
 
+app.post("/authenticate/login", limiter, async (req, res) => {
+  try {
+    const { username, password } = req.body;
 
+    // Validate input
+    if (
+      !username ||
+      !password ||
+      typeof username !== "string" ||
+      typeof password !== "string"
+    ) {
+      return res.status(400).json({ error: "Invalid credentials format" });
+    }
+
+    console.log('Username:', username);
+    console.log('Password:', password);
+
+    const dbClient = await getClient();
+    const db = dbClient.db("foodie");
+    const user = await db.collection("documents").findOne({
+      username: username,
+      type: "user",
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Verify password
+    const validPassword = await argon2.verify(user.password, password);
+    if (!validPassword) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Create JWT payload
+    const payload = {
+      userId: user._id,
+      username: user.username,
+    };
+
+    console.log('KEY', KEY);
+
+    const token = jwt.sign(payload, KEY, { expiresIn: "1h" });
+
+    // Set HTTP-only cookie
+    const serialized = serialize("token", token, {
+      httpOnly: true,
+      secure: PRODUCTION,
+      sameSite: "strict",
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: "/",
+    });
+
+    res.setHeader("Set-Cookie", serialized);
+
+    // Return minimal user info (avoid sending sensitive data)
+    return res.json({
+      success: true,
+      user: {
+        username: user.username,
+        id: user._id,
+      },
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 app.get("/authenticate/logout", (req, res) => {
@@ -320,7 +397,82 @@ app.get("/authenticate/protected", (req, res) => {
   }
 });
 
+// Just used to generate a hash for admin accounts.
+app.post("/hash-password", async (req, res) => {
+  console.log("Hashing password...");
+  try {
+    const { password } = req.body;
 
+    // Input validation
+    if (!password || typeof password !== "string" || password.length < 0) {
+      return res.status(400).json({
+        error: "Password must be a string of at least 8 characters",
+      });
+    }
+
+    // Argon2id with recommended parameters
+    const hash = await argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 65536, // 64MB in KiB
+      timeCost: 3, // iterations
+      parallelism: 4,
+      saltLength: 16,
+    });
+
+    // const sampleRestaurants = [
+    //   {
+    //     username: "admin",
+    //     password: hash,
+    //     roles: ["admin"],
+    //     type: 'user'
+    //   }
+    // ];
+
+    // const dbClient = await getClient();
+    // const db = dbClient.db("foodie");
+
+    // await db.collection("documents").insertMany(sampleRestaurants);
+
+    res.json({
+      hash,
+      // Note: Salt is embedded in the hash string
+      algorithm: "argon2id",
+    });
+  } catch (error) {
+    console.error("Password hashing failed:", error);
+    res.status(500).json({ error: "Password hashing failed" });
+  }
+});
+
+app.post("/generate-key", keyGenLimiter, async (req, res) => {
+  try {
+    const { length = 64 } = req.body; // Default to 64 bytes
+
+    // Validate input
+    if (length < 32 || length > 128) {
+      return res.status(400).json({
+        error: 'Key length must be between 32 and 128 bytes'
+      });
+    }
+
+    // Generate cryptographically secure random bytes
+    const buffer = crypto.randomBytes(length);
+    
+    // Convert to base64 for safe storage
+    const key = buffer.toString('base64');
+
+    res.json({
+      key,
+      length: buffer.length,
+      format: 'base64',
+      usage: 'Set this as your JWT_KEY environment variable'
+    });
+
+  } catch (error) {
+    console.error('Key generation failed:', error);
+    res.status(500).json({ error: 'Key generation failed' });
+  }
+});
 
 // Handle graceful shutdown
 process.on("SIGINT", async () => {
