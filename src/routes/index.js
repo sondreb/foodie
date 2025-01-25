@@ -296,8 +296,6 @@ app.post("/authenticate/login", limiter, async (req, res) => {
       username: user.username,
     };
 
-    console.log('KEY', KEY);
-
     const token = jwt.sign(payload, KEY, { expiresIn: "1h" });
 
     // Set HTTP-only cookie
