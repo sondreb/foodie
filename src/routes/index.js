@@ -327,13 +327,34 @@ app.post("/authenticate/login", limiter, async (req, res) => {
     const token = jwt.sign(payload, KEY, { expiresIn: "1h" });
 
     // Set HTTP-only cookie
-    const serialized = serialize("token", token, {
-      httpOnly: true,
-      secure: PRODUCTION,
-      sameSite: "strict",
-      maxAge: 60 * 60 * 24, // 24 hours
-      path: "/",
-    });
+    // const serialized = serialize("token", token, {
+    //   httpOnly: true,
+    //   secure: PRODUCTION,
+    //   sameSite: "strict",
+    //   maxAge: 60 * 60 * 24, // 24 hours
+    //   path: "/",
+    // });
+
+    let serialized;
+
+    if (PRODUCTION) {
+      console.log("PRODUCTION!!!");
+      // If the verification failed, it should have thrown an exception by now. We can generate an JWT and make a cookie for it.
+      serialized = serialize("token", token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        maxAge: 60 * 60 * 24 * 1, // 1 day, should this cookie be used to issue session cookies and be long-lived? The JWT itself is only valid 1h.
+        path: "/",
+      });
+    } else {
+      console.log("DEVELOPMENT!!!");
+      // If the verification failed, it should have thrown an exception by now. We can generate an JWT and make a cookie for it.
+      serialized = serialize("token", token, {
+        maxAge: 60 * 60 * 24 * 1, // 1 day, should this cookie be used to issue session cookies and be long-lived? The JWT itself is only valid 1h.
+        path: "/",
+      });
+    }
 
     res.setHeader("Set-Cookie", serialized);
 
@@ -359,13 +380,24 @@ app.get("/authenticate/logout", (req, res) => {
     });
   }
 
-  const serialized = serialize("token", null, {
-    httpOnly: true,
-    secure: PRODUCTION,
-    sameSite: "strict",
-    maxAge: -1,
-    path: "/",
-  });
+  if (PRODUCTION) {
+    console.log("PRODUCTION!!!");
+    // If the verification failed, it should have thrown an exception by now. We can generate an JWT and make a cookie for it.
+    const serialized = serialize("token", null, {
+      httpOnly: true,
+      secure: PRODUCTION,
+      sameSite: "strict",
+      maxAge: -1,
+      path: "/",
+    });
+  } else {
+    console.log("DEVELOPMENT!!!");
+    // If the verification failed, it should have thrown an exception by now. We can generate an JWT and make a cookie for it.
+    serialized = serialize("token", null, {
+      maxAge: 60 * 60 * 24 * 1, // 1 day, should this cookie be used to issue session cookies and be long-lived? The JWT itself is only valid 1h.
+      path: "/",
+    });
+  }
 
   res.setHeader("Set-Cookie", serialized);
 
