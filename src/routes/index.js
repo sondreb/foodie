@@ -287,8 +287,6 @@ app.post("/authenticate/login", limiter, async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    console.log('Login...', username, password);
-
     // Validate input
     if (
       !username ||
@@ -301,18 +299,12 @@ app.post("/authenticate/login", limiter, async (req, res) => {
 
     const dbClient = await getClient();
 
-    console.log('Get Client worked');
-
     const db = dbClient.db("foodie");
-
-    console.log('Got database...');
 
     const user = await db.collection("documents").findOne({
       username: username,
       type: "user",
     });
-
-    console.log('Got user...', user);
 
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -321,15 +313,13 @@ app.post("/authenticate/login", limiter, async (req, res) => {
     // Verify password
     const validPassword = await argon2.verify(user.password, password);
 
-    console.log('Valid password...', validPassword);
-
     if (!validPassword) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     // Create JWT payload
     const payload = {
-      userId: user._id,
+      id: user._id,
       username: user.username,
       roles: user.roles
     };
