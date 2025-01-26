@@ -4,7 +4,8 @@
   "main": "src/routes/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/routes/index.js"
+    "start": "node src/routes/index.js",
+    "test": "node test/tests.js"
   },
   "dependencies": {
     "argon2": "^0.31.2",
@@ -18,5 +19,8 @@
     "mongodb": "^6.12.0",
     "node-cache": "^5.1.2",
     "uuid-mongodb": "^2.6.0"
+  },
+  "devDependencies": {
+    "node-fetch": "^3.3.2"
   }
 }

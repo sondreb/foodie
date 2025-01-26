@@ -107,6 +107,29 @@ app.use(
 
 app.disable("x-powered-by");
 
+// Add this middleware function after the imports
+const adminAuth = async (req, res, next) => {
+  try {
+    const { cookies } = req;
+    const token = cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const decoded = jwt.verify(token, KEY);
+    
+    if (!decoded.roles?.includes('admin')) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
 // Define your routes here
 app.get("/version", (req, res) => {
   res.json({
@@ -294,6 +317,7 @@ app.post("/authenticate/login", limiter, async (req, res) => {
     const payload = {
       userId: user._id,
       username: user.username,
+      roles: user.roles
     };
 
     const token = jwt.sign(payload, KEY, { expiresIn: "1h" });
@@ -312,10 +336,7 @@ app.post("/authenticate/login", limiter, async (req, res) => {
     // Return minimal user info (avoid sending sensitive data)
     return res.json({
       success: true,
-      user: {
-        username: user.username,
-        id: user._id,
-      },
+      data: payload
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -466,6 +487,135 @@ app.post("/generate-key", keyGenLimiter, async (req, res) => {
   } catch (error) {
     console.error('Key generation failed:', error);
     res.status(500).json({ error: 'Key generation failed' });
+  }
+});
+
+// Get all users (admin only)
+app.get("/admin/users", adminAuth, async (req, res) => {
+  try {
+    const dbClient = await getClient();
+    const db = dbClient.db("foodie");
+    const users = await db.collection("documents")
+      .find({ type: "user" })
+      .project({ password: 0 }) // Exclude password field
+      .toArray();
+
+    res.json({ success: true, data: users });
+  } catch (error) {
+    console.error("Failed to fetch users:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Create new user (admin only)
+app.post("/admin/users", adminAuth, async (req, res) => {
+  try {
+    const { username, password, roles = ['user'] } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password required" });
+    }
+
+    const dbClient = await getClient();
+    const db = dbClient.db("foodie");
+
+    // Check if username already exists
+    const existing = await db.collection("documents").findOne({ 
+      type: "user",
+      username: username 
+    });
+
+    if (existing) {
+      return res.status(409).json({ error: "Username already exists" });
+    }
+
+    const hash = await argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 4,
+      saltLength: 16,
+    });
+
+    const user = {
+      _id: MUUID.v4(),
+      type: "user",
+      username,
+      password: hash,
+      roles,
+      created: new Date(),
+      createdBy: req.user.username
+    };
+
+    await db.collection("documents").insertOne(user);
+
+    // Remove password before sending response
+    delete user.password;
+    res.status(201).json({ success: true, data: user });
+  } catch (error) {
+    console.error("Failed to create user:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Update user (admin only)
+app.put("/admin/users/:id", adminAuth, async (req, res) => {
+  try {
+    const { username, roles } = req.body;
+    const userId = req.params.id;
+
+    if (!username && !roles) {
+      return res.status(400).json({ error: "No valid fields to update" });
+    }
+
+    const dbClient = await getClient();
+    const db = dbClient.db("foodie");
+
+    const update = {
+      $set: {
+        ...(username && { username }),
+        ...(roles && { roles }),
+        updated: new Date(),
+        updatedBy: req.user.username
+      }
+    };
+
+    const result = await db.collection("documents").updateOne(
+      { _id: MUUID.from(userId), type: "user" },
+      update
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ success: true, message: "User updated" });
+  } catch (error) {
+    console.error("Failed to update user:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Delete user (admin only)
+app.delete("/admin/users/:id", adminAuth, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const dbClient = await getClient();
+    const db = dbClient.db("foodie");
+
+    const result = await db.collection("documents").deleteOne({
+      _id: MUUID.from(userId),
+      type: "user"
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ success: true, message: "User deleted" });
+  } catch (error) {
+    console.error("Failed to delete user:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
