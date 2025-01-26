@@ -4,7 +4,7 @@ import compression from "cors";
 import * as dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import cookieParser from "cookie-parser";
 import { readFile } from "fs/promises";
 import rateLimit from "express-rate-limit";
@@ -22,7 +22,8 @@ const __dirname = dirname(__filename);
 // Initialize dotenv
 dotenv.config({ path: resolve(__dirname, "../../.env") });
 
-const mUUID = MUUID.mode("relaxed"); // use relaxed mode
+// RELAXED appears to have issued with Cosmos DB web explorer.
+// const mUUID = MUUID.mode("relaxed"); // use relaxed mode
 const PRODUCTION = process.env["NODE_ENV"] === "production";
 const KEY = process.env["JWT_KEY"];
 
@@ -137,48 +138,48 @@ app.get("/version", (req, res) => {
   });
 });
 
-app.get("/restaurants", async (req, res) => {
-  try {
-    const dbClient = await getClient();
-    const db = dbClient.db("foodie");
+// app.get("/restaurants", async (req, res) => {
+//   try {
+//     const dbClient = await getClient();
+//     const db = dbClient.db("foodie");
 
-    // Check if collection exists and create if it doesn't
-    const collections = await db
-      .listCollections({ name: "restaurants" })
-      .toArray();
-    if (collections.length === 0) {
-      console.log("Creating restaurants collection...");
-      await db.createCollection("restaurants");
+//     // Check if collection exists and create if it doesn't
+//     const collections = await db
+//       .listCollections({ name: "restaurants" })
+//       .toArray();
+//     if (collections.length === 0) {
+//       console.log("Creating restaurants collection...");
+// //       await db.createCollection("documents");
 
-      // Insert sample restaurants
-      const sampleRestaurants = [
-        {
-          name: "Pizza Palace",
-          cuisine: "Italian",
-          address: "123 Main St",
-          rating: 4.5,
-          created: new Date(),
-        },
-        {
-          name: "Sushi Master",
-          cuisine: "Japanese",
-          address: "456 Oak Ave",
-          rating: 4.8,
-          created: new Date(),
-        },
-      ];
+//       // Insert sample restaurants
+//       const sampleRestaurants = [
+//         {
+//           name: "Pizza Palace",
+//           cuisine: "Italian",
+//           address: "123 Main St",
+//           rating: 4.5,
+//           created: new Date(),
+//         },
+//         {
+//           name: "Sushi Master",
+//           cuisine: "Japanese",
+//           address: "456 Oak Ave",
+//           rating: 4.8,
+//           created: new Date(),
+//         },
+//       ];
 
-      await db.collection("restaurants").insertMany(sampleRestaurants);
-      console.log("Added sample restaurants");
-    }
+//       await db.collection("restaurants").insertMany(sampleRestaurants);
+//       console.log("Added sample restaurants");
+//     }
 
-    const restaurants = await db.collection("restaurants").find({}).toArray();
-    res.json(restaurants);
-  } catch (error) {
-    console.error("Database operation failed:", error);
-    res.status(500).json({ error: "Database operation failed" });
-  }
-});
+//     const restaurants = await db.collection("restaurants").find({}).toArray();
+//     res.json(restaurants);
+//   } catch (error) {
+//     console.error("Database operation failed:", error);
+//     res.status(500).json({ error: "Database operation failed" });
+//   }
+// });
 
 app.get("/menu/:restaurantId", (req, res) => {
   // Your code to get the menu of a restaurant
@@ -286,6 +287,8 @@ app.post("/authenticate/login", limiter, async (req, res) => {
   try {
     const { username, password } = req.body;
 
+    console.log('Login...', username, password);
+
     // Validate input
     if (
       !username ||
@@ -297,11 +300,19 @@ app.post("/authenticate/login", limiter, async (req, res) => {
     }
 
     const dbClient = await getClient();
+
+    console.log('Get Client worked');
+
     const db = dbClient.db("foodie");
+
+    console.log('Got database...');
+
     const user = await db.collection("documents").findOne({
       username: username,
       type: "user",
     });
+
+    console.log('Got user...', user);
 
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -309,6 +320,9 @@ app.post("/authenticate/login", limiter, async (req, res) => {
 
     // Verify password
     const validPassword = await argon2.verify(user.password, password);
+
+    console.log('Valid password...', validPassword);
+
     if (!validPassword) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
@@ -538,7 +552,8 @@ app.post("/admin/users", adminAuth, async (req, res) => {
     });
 
     const user = {
-      _id: MUUID.v4(),
+      //_id: MUUID.v4(),
+      _id: new ObjectId(),
       type: "user",
       username,
       password: hash,
@@ -581,7 +596,7 @@ app.put("/admin/users/:id", adminAuth, async (req, res) => {
     };
 
     const result = await db.collection("documents").updateOne(
-      { _id: MUUID.from(userId), type: "user" },
+      { _id: ObjectId.createFromHexString(userId), type: "user" },
       update
     );
 
@@ -603,8 +618,10 @@ app.delete("/admin/users/:id", adminAuth, async (req, res) => {
     const dbClient = await getClient();
     const db = dbClient.db("foodie");
 
+    const id = ObjectId.createFromHexString(userId);
+
     const result = await db.collection("documents").deleteOne({
-      _id: MUUID.from(userId),
+      _id: id,
       type: "user"
     });
 
