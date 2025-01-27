@@ -262,7 +262,7 @@ app.post("/authenticate", async (req, res) => {
       serialized = serialize("token", token, {
         httpOnly: true,
         secure: true,
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 60 * 60 * 24 * 1, // 1 day, should this cookie be used to issue session cookies and be long-lived? The JWT itself is only valid 1h.
         path: "/",
       });
@@ -337,7 +337,7 @@ app.post("/authenticate/login", limiter, async (req, res) => {
     // const serialized = serialize("token", token, {
     //   httpOnly: true,
     //   secure: PRODUCTION,
-    //   sameSite: "strict",
+    //   sameSite: "lax",
     //   maxAge: 60 * 60 * 24, // 24 hours
     //   path: "/",
     // });
@@ -350,7 +350,7 @@ app.post("/authenticate/login", limiter, async (req, res) => {
       serialized = serialize("token", token, {
         httpOnly: true,
         secure: true,
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 60 * 60 * 24 * 1, // 1 day, should this cookie be used to issue session cookies and be long-lived? The JWT itself is only valid 1h.
         path: "/",
       });
@@ -393,7 +393,7 @@ app.get("/authenticate/logout", (req, res) => {
     const serialized = serialize("token", null, {
       httpOnly: true,
       secure: PRODUCTION,
-      sameSite: "strict",
+      sameSite: "lax",
       maxAge: -1,
       path: "/",
     });
