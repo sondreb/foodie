@@ -1,6 +1,6 @@
 {
   "name": "foodie",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "main": "src/routes/index.js",
   "type": "module",
   "scripts": {
