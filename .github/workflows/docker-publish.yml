@@ -28,8 +28,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.AZURE_REGISTRY_URL }}/foodie:${{ github.sha }}
-          tags: ${{ secrets.AZURE_REGISTRY_URL }}/foodie:latest
+          tags: |
+            ${{ secrets.AZURE_REGISTRY_URL }}/foodie:${{ github.sha }}
+            ${{ secrets.AZURE_REGISTRY_URL }}/foodie:latest
 
       - name: Login to Azure
         uses: azure/login@v1
