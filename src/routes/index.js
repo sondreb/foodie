@@ -56,17 +56,23 @@ const app = express();
 // Apply the rate limiting middleware to all requests
 app.use(limiter);
 
-// app.use(cors({origin: ['http://localhost:3000', 'http://localhost:4200', 'https://foodie.brainbox.no']}));
+// Define CORS options
+const corsOptions = {
+  origin: PRODUCTION 
+    ? 'https://foodie.brainbox.no'
+    : ['http://localhost:3000', 'http://localhost:4200'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+// Apply CORS with options
+app.use(cors(corsOptions));
 
 app.use(express.json());
 
-app.use(function (req, res, next) {
-  res.setHeader("Access-Control-Allow-Origin", "https://foodie.brainbox.no");
-  //   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
-  //   res.setHeader("Access-Control-Allow-Headers", "X-Requested-With,content-type");
-  res.setHeader("Access-Control-Allow-Credentials", true);
-  next();
-});
+// Remove the manual CORS setup
+// app.use(function (req, res, next) { ... });
 
 const mongoConnectionString =
   process.env.MONGODB_URI_LOCAL ||
@@ -677,5 +683,5 @@ process.on("unhandledRejection", (reason, promise) => {
 // Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`); 
 });
