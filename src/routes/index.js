@@ -142,6 +142,7 @@ const adminAuth = async (req, res, next) => {
 app.get("/version", (req, res) => {
   res.json({
     version: packageJson.version,
+    production: PRODUCTION
   });
 });
 
