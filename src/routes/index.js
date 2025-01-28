@@ -63,7 +63,9 @@ const corsOptions = {
     : ['http://localhost:3000', 'http://localhost:4200'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  exposedHeaders: ['set-cookie'],
+  maxAge: 86400 // 24 hours in seconds
 };
 
 // Apply CORS with options
